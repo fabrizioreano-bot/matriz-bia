@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Radar B-IA | Dashboard Benchmarking</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style> body { font-family: 'Plus Jakarta Sans', sans-serif; } </style>
@@ -46,7 +47,6 @@
                     <div class="relative min-w-[320px]">
                         <select id="moduloSelect" onchange="renderComparativa()" class="w-full appearance-none bg-slate-50 border border-slate-300 hover:border-blue-500 text-slate-800 font-bold text-sm rounded-xl py-2.5 px-4 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition cursor-pointer shadow-inner">
                             <option value="recargas" selected>💳 Comparativa de Recargas (Mín. - Máx.)</option>
-                            <option value="retiros">💸 Comparativa de Retiros (Mín. - Máx.)</option>
                         </select>
                         <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-blue-600">
                             <i class="fa-solid fa-chevron-down text-xs"></i>
@@ -54,18 +54,13 @@
                     </div>
                 </div>
             </div>
-            
-            <div class="sm:hidden w-full flex justify-between items-center bg-slate-50 p-2 rounded-lg border border-slate-200">
-                <span class="text-[10px] font-bold text-slate-500 uppercase">Estado:</span>
-                <span id="timestampBadgeMobile" class="text-[10px] font-bold text-slate-600"><i class="fa-solid fa-spinner fa-spin mr-1"></i> Cargando...</span>
-            </div>
         </div>
 
         <div class="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-lg shadow-slate-200/50">
             <div class="p-4 bg-slate-50/80 border-b border-slate-200 flex justify-between items-center">
                 <h2 class="font-extrabold text-slate-900 flex items-center gap-2">
                     <i class="fa-solid fa-code-compare text-blue-600"></i>
-                    <span id="tablaTitulo">Matriz Comparativa B-IA: Rangos de Recarga por Operador</span>
+                    <span>Matriz Comparativa B-IA: Rangos de Recarga por Operador</span>
                 </h2>
                 <span class="text-xs font-bold bg-blue-50 text-blue-700 px-3 py-1 rounded-lg border border-blue-200">
                     6 Casas de Apuestas
@@ -86,7 +81,7 @@
                         </tr>
                     </thead>
                     <tbody id="tablaComparativaBody" class="divide-y divide-slate-200 text-xs">
-                        <tr><td colspan="7" class="py-8 text-center text-slate-500 font-bold animate-pulse">Cargando datos en vivo...</td></tr>
+                        <tr><td colspan="7" class="py-8 text-center text-slate-500 font-bold animate-pulse">Cargando datos en vivo desde Google Sheets...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -95,83 +90,47 @@
 
     <script>
         const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSqEST1wyo3laknHkhAJmT5RLyJpRDEpn79kZKGaN7phS7PrgcOA_npapCd4tf1VTlz4jbb-qhCwivM/pub?gid=1338585401&single=true&output=csv";
-        
-        let parsedSheetsData = { recargas: [], retiros: [] };
+        let parsedData = [];
 
-        function actualizarIndicadorFecha(error = false) {
-            const badge = document.getElementById('timestampBadge');
-            const badgeMobile = document.getElementById('timestampBadgeMobile');
-            
-            if (error) {
-                const errorHtml = `<i class="fa-solid fa-triangle-exclamation text-rose-500"></i><span>Error al sincronizar</span>`;
-                badge.innerHTML = errorHtml;
-                badge.className = "flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-rose-50 border border-rose-200 text-xs font-bold text-rose-700 shadow-sm transition-all duration-300";
-                if(badgeMobile) badgeMobile.innerHTML = `<span class="text-rose-600">Error de conexión</span>`;
-                return;
-            }
-
+        function actualizarFecha() {
             const ahora = new Date();
-            const opcionesFecha = { day: '2-digit', month: 'short', year: 'numeric' };
-            const opcionesHora = { hour: '2-digit', minute: '2-digit', hour12: true };
-            const fechaStr = ahora.toLocaleDateString('es-PE', opcionesFecha);
-            const horaStr = ahora.toLocaleTimeString('es-PE', opcionesHora);
+            const fechaStr = ahora.toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' });
+            const horaStr = ahora.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: true });
             
-            const textoDisplay = `${fechaStr} - ${horaStr}`;
-            
-            badge.innerHTML = `<i class="fa-solid fa-check-circle text-emerald-500"></i><span>${textoDisplay}</span>`;
-            badge.className = "flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-700 shadow-sm transition-all duration-300";
-            
-            if(badgeMobile) badgeMobile.innerHTML = `<i class="fa-solid fa-check-circle text-emerald-500 mr-1"></i><span class="text-emerald-700">${textoDisplay}</span>`;
+            const badge = document.getElementById('timestampBadge');
+            badge.innerHTML = `<i class="fa-solid fa-check-circle text-emerald-500"></i><span>${fechaStr} - ${horaStr}</span>`;
+            badge.className = "flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-700 shadow-sm";
         }
 
-        async function cargarDatosGoogleSheets() {
-            try {
-                // Anti-cache system para asegurar que siempre jale los datos más frescos
-                const noCacheUrl = CSV_URL + "&t=" + new Date().getTime();
-                const response = await fetch(noCacheUrl, { cache: "no-store" });
-                
-                if (!response.ok) throw new Error("Error en la conexión");
-                
-                const csvText = await response.text();
-                const lines = csvText.split('\n');
-                const recargas = [];
-                
-                for (let i = 1; i < lines.length; i++) {
-                    if (!lines[i].trim()) continue;
-                    let row = lines[i];
-                    let inQuotes = false;
-                    let cols = [];
-                    let current = "";
-                    for(let char of row) {
-                        if(char === '"') inQuotes = !inQuotes;
-                        else if(char === ',' && !inQuotes) { cols.push(current.trim()); current = ""; }
-                        else current += char;
-                    }
-                    cols.push(current.trim());
-                    cols = cols.map(c => c.replace(/^"|"$/g, ''));
-
-                    if (cols.length >= 2 && cols[0]) {
-                        recargas.push({
-                            operador: cols[0],
-                            metodo: cols[1],
-                            min: cols[2] || '-',
-                            max: cols[3] || '-',
-                            novedad: cols[4] || ''
+        Papa.parse(CSV_URL, {
+            download: true,
+            header: false,
+            skipEmptyLines: true,
+            complete: function(results) {
+                const rows = results.data;
+                const items = [];
+                for (let i = 1; i < rows.length; i++) {
+                    const row = rows[i];
+                    if (row.length >= 2 && row[0]) {
+                        items.push({
+                            operador: row[0].trim(),
+                            metodo: row[1].trim(),
+                            min: row[2] ? row[2].trim() : '-',
+                            max: row[3] ? row[3].trim() : '-',
+                            novedad: row[4] ? row[4].trim() : ''
                         });
                     }
                 }
-                if (recargas.length > 0) {
-                    organizarTabla(recargas);
-                    actualizarIndicadorFecha(false);
-                }
-            } catch (err) {
+                organizarYRenderizar(items);
+                actualizarFecha();
+            },
+            error: function(err) {
                 console.error(err);
-                document.getElementById('tablaComparativaBody').innerHTML = `<tr><td colspan="7" class="py-10 text-center text-rose-600 bg-rose-50 font-bold text-sm">Error de conexión.</td></tr>`;
-                actualizarIndicadorFecha(true);
+                document.getElementById('tablaComparativaBody').innerHTML = `<tr><td colspan="7" class="py-10 text-center text-rose-600 bg-rose-50 font-bold text-sm">Error de sincronización con Google Sheets.</td></tr>`;
             }
-        }
+        });
 
-        function organizarTabla(rows) {
+        function organizarYRenderizar(rows) {
             const pasarelasMap = {};
             rows.forEach(r => {
                 const pasarela = r.metodo;
@@ -189,26 +148,41 @@
                     alerta: r.novedad.toLowerCase().includes('subi') || r.novedad.toLowerCase().includes('codigo') || r.novedad.toLowerCase().includes('alerta')
                 };
             });
-            parsedSheetsData.recargas = Object.values(pasarelasMap);
-            renderComparativa();
-        }
 
-        function renderComparativa() {
-            const key = document.getElementById('moduloSelect').value;
+            const list = Object.values(pasarelasMap);
             const body = document.getElementById('tablaComparativaBody');
             body.innerHTML = '';
-            const rows = parsedSheetsData[key] || [];
 
-            rows.forEach(r => {
+            list.forEach(r => {
                 const renderCell = (cell) => {
                     if (!cell || !cell.ok) return `<span class="text-slate-400 font-mono">-</span>`;
-                    return `<div class="space-y-0.5"><div class="flex items-center justify-center gap-1 font-mono text-[11px]"><span class="text-blue-700 font-extrabold">${cell.min}</span><span class="text-slate-400 font-normal">─</span><span class="text-slate-700 font-bold">${cell.max}</span></div><div class="${cell.alerta ? 'text-amber-800 font-bold bg-amber-100 border border-amber-200 px-1.5 py-0.5 rounded text-[10px]' : 'text-slate-500 text-[10px]'}">${cell.status}</div></div>`;
+                    return `
+                        <div class="space-y-0.5">
+                            <div class="flex items-center justify-center gap-1 font-mono text-[11px]">
+                                <span class="text-blue-700 font-extrabold">${cell.min}</span>
+                                <span class="text-slate-400 font-normal">─</span>
+                                <span class="text-slate-700 font-bold">${cell.max}</span>
+                            </div>
+                            <div class="${cell.alerta ? 'text-amber-800 font-bold bg-amber-100 border border-amber-200 px-1.5 py-0.5 rounded text-[10px]' : 'text-slate-500 text-[10px]'}">
+                                ${cell.status}
+                            </div>
+                        </div>
+                    `;
                 };
-                body.innerHTML += `<tr class="hover:bg-slate-50 transition"><td class="py-3.5 px-4 font-bold text-slate-800 bg-white sticky left-0 z-10 border-r border-slate-200 shadow-sm">${r.pasarela}</td><td class="py-3.5 px-3 text-center border-r border-slate-200">${renderCell(r.teApuesto)}</td><td class="py-3.5 px-3 text-center border-r border-slate-200">${renderCell(r.betano)}</td><td class="py-3.5 px-3 text-center border-r border-slate-200">${renderCell(r.betsson)}</td><td class="py-3.5 px-3 text-center border-r border-slate-200">${renderCell(r.olimpo)}</td><td class="py-3.5 px-3 text-center border-r border-slate-200">${renderCell(r.apuestaTotal)}</td><td class="py-3.5 px-3 text-center bg-amber-50/30">${renderCell(r.doradoBet)}</td></tr>`;
+
+                body.innerHTML += `
+                    <tr class="hover:bg-slate-50 transition">
+                        <td class="py-3.5 px-4 font-bold text-slate-800 bg-white sticky left-0 z-10 border-r border-slate-200 shadow-sm">${r.pasarela}</td>
+                        <td class="py-3.5 px-3 text-center border-r border-slate-200">${renderCell(r.teApuesto)}</td>
+                        <td class="py-3.5 px-3 text-center border-r border-slate-200">${renderCell(r.betano)}</td>
+                        <td class="py-3.5 px-3 text-center border-r border-slate-200">${renderCell(r.betsson)}</td>
+                        <td class="py-3.5 px-3 text-center border-r border-slate-200">${renderCell(r.olimpo)}</td>
+                        <td class="py-3.5 px-3 text-center border-r border-slate-200">${renderCell(r.apuestaTotal)}</td>
+                        <td class="py-3.5 px-3 text-center bg-amber-50/30">${renderCell(r.doradoBet)}</td>
+                    </tr>
+                `;
             });
         }
-        
-        cargarDatosGoogleSheets();
     </script>
 </body>
 </html>
