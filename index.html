@@ -23,12 +23,11 @@
                 </div>
             </div>
             
-            <!-- Muestra ÚNICAMENTE la fecha/hora en que se modificó el Excel -->
             <div class="hidden sm:flex flex-col items-end justify-center">
-                <span class="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-0.5">Última Edición del Excel</span>
+                <span class="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-0.5">Sincronización en Vivo</span>
                 <div id="timestampBadge" class="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-700 shadow-sm transition-all duration-300">
-                    <i class="fa-solid fa-file-pen text-emerald-500"></i>
-                    <span id="timestampText">Obteniendo fecha de modificación...</span>
+                    <i class="fa-solid fa-check-circle text-emerald-500"></i>
+                    <span id="timestampText">Conectado</span>
                 </div>
             </div>
         </div>
@@ -57,8 +56,8 @@
             </div>
             
             <div class="sm:hidden w-full flex justify-between items-center bg-slate-50 p-2 rounded-lg border border-slate-200">
-                <span class="text-[10px] font-bold text-slate-500 uppercase">Modificado:</span>
-                <span id="timestampBadgeMobile" class="text-[10px] font-bold text-emerald-700">Cargando...</span>
+                <span class="text-[10px] font-bold text-slate-500 uppercase">Estado:</span>
+                <span id="timestampBadgeMobile" class="text-[10px] font-bold text-emerald-700">Conectado</span>
             </div>
         </div>
 
@@ -112,33 +111,16 @@
         
         let parsedData = { recargas: [], retiros: [] };
 
-        // Lee la cabecera 'Last-Modified' del servidor de Google para obtener cuándo se guardó/modificó el archivo
-        async function obtenerFechaModificacionExcel() {
+        function obtenerFechaSincronizacion() {
             const badgeText = document.getElementById('timestampText');
             const badgeMobile = document.getElementById('timestampBadgeMobile');
-            const csvUrl = `https://docs.google.com/spreadsheets/d/e/${DOC_KEY}/pub?gid=${SHEET_ID}&single=true&output=csv`;
+            const ahora = new Date();
+            const fechaStr = ahora.toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' });
+            const horaStr = ahora.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: true });
+            const textoFinal = `${fechaStr} - ${horaStr}`;
 
-            try {
-                const response = await fetch(csvUrl, { method: 'HEAD', cache: 'no-cache' });
-                const lastModified = response.headers.get('Last-Modified');
-
-                if (lastModified) {
-                    const fecha = new Date(lastModified);
-                    const fechaStr = fecha.toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' });
-                    const horaStr = fecha.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: true });
-                    const textoFinal = `${fechaStr} - ${horaStr}`;
-
-                    if(badgeText) badgeText.innerText = textoFinal;
-                    if(badgeMobile) badgeMobile.innerText = textoFinal;
-                } else {
-                    if(badgeText) badgeText.innerText = "Sincronizado con Excel";
-                }
-            } catch (err) {
-                const ahora = new Date();
-                const fechaStr = ahora.toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' });
-                const horaStr = ahora.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: true });
-                if(badgeText) badgeText.innerText = `${fechaStr} - ${horaStr}`;
-            }
+            if(badgeText) badgeText.innerText = textoFinal;
+            if(badgeMobile) badgeMobile.innerText = textoFinal;
         }
 
         function cargarDatosJSONP() {
@@ -163,20 +145,20 @@
 
                 rows.forEach(r => {
                     const c = r.c;
-                    if (c && c[0] && c[0].v) {
+                    if (c && c[0] && c[0].v !== undefined && c[0].v !== null) {
                         items.push({
                             operador: String(c[0].v || '').trim(),
-                            metodo: String(c[1] ? c[1].v : '').trim(),
-                            min: c[2] ? String(c[2].v) : '-',
-                            max: c[3] ? String(c[3].v) : '-',
-                            novedad: c[4] ? String(c[4].v) : ''
+                            metodo: String(c[1] ? (c[1].v || '') : '').trim(),
+                            min: c[2] ? String(c[2].v !== null ? c[2].v : '-') : '-',
+                            max: c[3] ? String(c[3].v !== null ? c[3].v : '-') : '-',
+                            novedad: c[4] ? String(c[4].v !== null ? c[4].v : '') : ''
                         });
                     }
                 });
 
                 if (items.length > 0) {
                     organizarTabla(items);
-                    obtenerFechaModificacionExcel();
+                    obtenerFechaSincronizacion();
                 } else {
                     mostrarError();
                 }
@@ -222,4 +204,41 @@
 
             if (rows.length === 0) {
                 body.innerHTML = `<tr><td colspan="7" class="py-8 text-center text-slate-400 font-bold">No hay registros disponibles para este módulo.</td></tr>`;
-                return
+                return;
+            }
+
+            rows.forEach(r => {
+                const renderCell = (cell) => {
+                    if (!cell || !cell.ok) return `<span class="text-slate-400 font-mono">-</span>`;
+                    return `
+                        <div class="space-y-0.5">
+                            <div class="flex items-center justify-center gap-1 font-mono text-[11px]">
+                                <span class="text-blue-700 font-extrabold">${cell.min}</span>
+                                <span class="text-slate-400 font-normal">─</span>
+                                <span class="text-slate-700 font-bold">${cell.max}</span>
+                            </div>
+                            <div class="${cell.alerta ? 'text-amber-800 font-bold bg-amber-100 border border-amber-200 px-1.5 py-0.5 rounded text-[10px]' : 'text-slate-500 text-[10px]'}">
+                                ${cell.status}
+                            </div>
+                        </div>
+                    `;
+                };
+
+                body.innerHTML += `
+                    <tr class="hover:bg-slate-50 transition">
+                        <td class="py-3.5 px-4 font-bold text-slate-800 bg-white sticky left-0 z-10 border-r border-slate-200 shadow-sm">${r.pasarela}</td>
+                        <td class="py-3.5 px-3 text-center border-r border-slate-200">${renderCell(r.teApuesto)}</td>
+                        <td class="py-3.5 px-3 text-center border-r border-slate-200">${renderCell(r.betano)}</td>
+                        <td class="py-3.5 px-3 text-center border-r border-slate-200">${renderCell(r.betsson)}</td>
+                        <td class="py-3.5 px-3 text-center border-r border-slate-200">${renderCell(r.olimpo)}</td>
+                        <td class="py-3.5 px-3 text-center border-r border-slate-200">${renderCell(r.apuestaTotal)}</td>
+                        <td class="py-3.5 px-3 text-center bg-amber-50/30">${renderCell(r.doradoBet)}</td>
+                    </tr>
+                `;
+            });
+        }
+
+        cargarDatosJSONP();
+    </script>
+</body>
+</html>
