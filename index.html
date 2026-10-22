@@ -126,7 +126,10 @@
 
         async function cargarDatosGoogleSheets() {
             try {
-                const response = await fetch(CSV_URL);
+                // Anti-cache system para asegurar que siempre jale los datos más frescos
+                const noCacheUrl = CSV_URL + "&t=" + new Date().getTime();
+                const response = await fetch(noCacheUrl, { cache: "no-store" });
+                
                 if (!response.ok) throw new Error("Error en la conexión");
                 
                 const csvText = await response.text();
@@ -163,7 +166,7 @@
                 }
             } catch (err) {
                 console.error(err);
-                document.getElementById('tablaComparativaBody').innerHTML = `<tr><td colspan="7" class="py-10 text-center text-rose-600 bg-rose-50 font-bold text-sm">Error de conexión con la base de datos.</td></tr>`;
+                document.getElementById('tablaComparativaBody').innerHTML = `<tr><td colspan="7" class="py-10 text-center text-rose-600 bg-rose-50 font-bold text-sm">Error de conexión.</td></tr>`;
                 actualizarIndicadorFecha(true);
             }
         }
